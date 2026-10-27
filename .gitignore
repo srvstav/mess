@@ -10,3 +10,5 @@ RENDER_VALUE.txt
 CLOUD_DETAILS.txt
 /ca.pem
 backend/.workbench_cloud
+server.log
+live.log

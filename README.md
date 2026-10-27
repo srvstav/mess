@@ -17,6 +17,14 @@ An RDBMS project: **MySQL 8** (14 tables, 12 triggers, 4 stored procedures, 1 fu
  Offline mode: start.bat runs the API + website on one laptop against that laptop's MySQL.
 ```
 
+## ▶ One step
+
+- **Windows:** double-click **`start_all.bat`**. The first time it builds the database (asks for the MySQL root password);
+  every time it starts the website at http://localhost:8000, the live activity, and MySQL Workbench with the report's queries.
+- **macOS:** `./spin.sh` does the same.
+
+Needs MySQL Server + Workbench and Python installed once (section A). The project report is in `report/`.
+
 ## ▶ Start here (the whole handover)
 
 **Everyone (on their own Windows laptop, ~10 min):**
