@@ -18,10 +18,12 @@
     return "hero";
   };
 
+  const PHOTOS_VERSION = 3;  // bump when a photo changes, so browsers fetch the new one
+
   const esc = s => s.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
   // small: the 200px file for little thumbnails. eager: for the first screen, skip lazy loading.
   window.plateHTML = (dishes, { small = false, eager = false, key = plateFor(dishes) } = {}) =>
-    `<img class="plate-img" src="food/${key}${small ? "-sm" : ""}.webp" alt="${esc(dishes.join(", "))}"
+    `<img class="plate-img" src="food/${key}${small ? "-sm" : ""}.webp?v=${PHOTOS_VERSION}" alt="${esc(dishes.join(", "))}"
       width="${small ? 200 : 720}" height="${small ? 200 : 720}" decoding="async"${eager ? "" : ' loading="lazy"'}>`;
 })();

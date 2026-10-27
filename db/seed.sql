@@ -23,7 +23,7 @@ INSERT INTO menu_items (mess_id, slot_id, dish) VALUES
   -- BluSpring
   (2, 1, 'Berry Pancakes'), (2, 1, 'Boiled Eggs'), (2, 1, 'Bread Butter Jam'), (2, 1, 'Cold Coffee'),
   (2, 2, 'Chole'), (2, 2, 'Bhature'), (2, 2, 'Veg Pulao'), (2, 2, 'Lassi'),
-  (2, 3, 'Fresh Fruit Tart'), (2, 3, 'Veg Sandwich'), (2, 3, 'Lemon Tea'),
+  (2, 3, 'Pineapple Upside-down Cake'), (2, 3, 'Veg Sandwich'), (2, 3, 'Lemon Tea'),
   (2, 4, 'Dal Baati Churma'), (2, 4, 'Gatte ki Sabzi'), (2, 4, 'Chapati'), (2, 4, 'Kheer');
 
 -- Sample NGOs near campus. Fictional names and numbers, for the demo only.

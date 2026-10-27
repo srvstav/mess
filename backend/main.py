@@ -234,7 +234,7 @@ def admin_redirect() -> RedirectResponse:
 async def always_fresh_site(request: Request, call_next):
     """Browsers must re-check pages and scripts each visit (a 304 if unchanged), so an update shows at once."""
     response = await call_next(request)
-    if request.url.path == "/" or request.url.path.endswith((".html", ".js", ".css")):
+    if request.url.path == "/" or request.url.path.endswith((".html", ".js", ".css", ".webp")):
         response.headers["Cache-Control"] = "no-cache"
     return response
 

@@ -11,7 +11,7 @@ const FALLBACK_MENU = { slots: [
     { mess_id: 2, name: "BluSpring", dishes: ["Chole", "Bhature", "Veg Pulao", "Lassi"] } ] },
   { slot_id: 3, name: "Hi-Tea", starts_at: "17:00", ends_at: "18:00", messes: [
     { mess_id: 1, name: "BluDove", dishes: ["Samosa", "Green Chutney", "Masala Chai"] },
-    { mess_id: 2, name: "BluSpring", dishes: ["Fresh Fruit Tart", "Veg Sandwich", "Lemon Tea"] } ] },
+    { mess_id: 2, name: "BluSpring", dishes: ["Pineapple Upside-down Cake", "Veg Sandwich", "Lemon Tea"] } ] },
   { slot_id: 4, name: "Dinner", starts_at: "19:30", ends_at: "21:30", messes: [
     { mess_id: 1, name: "BluDove", dishes: ["Farmhouse Pizza", "Veg Burger", "Garlic Bread", "Gulab Jamun"] },
     { mess_id: 2, name: "BluSpring", dishes: ["Dal Baati Churma", "Gatte ki Sabzi", "Chapati", "Kheer"] } ] },
