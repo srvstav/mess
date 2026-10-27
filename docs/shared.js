@@ -40,7 +40,10 @@ window.apiFetch = async (path, { method = "GET", body, headers = {}, onUnauthori
     });
   } catch {
     document.getElementById("live-dot")?.classList.remove("on");
-    throw new Error("Can't reach the mess server");
+    // Local runs: the usual cause is a closed start.bat window or MySQL not running.
+    throw new Error(location.hostname.endsWith("github.io")
+      ? "Can't reach the mess server"
+      : "Can't reach the mess server - is start.bat still open? Check localhost:8000/health");
   } finally {
     clearTimeout(kill);
     clearTimeout(slow);
