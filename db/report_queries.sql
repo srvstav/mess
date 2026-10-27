@@ -205,21 +205,21 @@ VALUES ('230100996', 'Bad Phone', 'M', '12345',
 
 -- Bookings of a student before the declaration of leave
 SELECT meal_date, slot_id, mess_id, status FROM bookings
-WHERE student_id = 16 AND meal_date = CURDATE() ORDER BY slot_id;
+WHERE student_id = 24 AND meal_date = CURDATE() ORDER BY slot_id;
 
 -- Execution of the stored procedure sp_pause_mess
-CALL sp_pause_mess(16, CURDATE(), CURDATE() + INTERVAL 1 DAY);
+CALL sp_pause_mess(24, CURDATE(), CURDATE() + INTERVAL 1 DAY);
 SELECT meal_date, slot_id, mess_id, status FROM bookings
-WHERE student_id = 16 AND meal_date = CURDATE() ORDER BY slot_id;
+WHERE student_id = 24 AND meal_date = CURDATE() ORDER BY slot_id;
 
 -- Rejection of a booking during leave by a trigger (SIGNAL SQLSTATE '45000')
 INSERT INTO bookings (student_id, meal_date, slot_id, mess_id, status)
-VALUES (16, CURDATE(), 4, 1, 'booked')
+VALUES (24, CURDATE(), 4, 1, 'booked')
 ON DUPLICATE KEY UPDATE mess_id = 1, status = 'booked';
 
 -- Execution of sp_resume_mess and the resulting audit entries
-CALL sp_resume_mess(16, CURDATE());
-SELECT event, detail FROM activity_log WHERE student_id = 16 ORDER BY id DESC LIMIT 4;
+CALL sp_resume_mess(24, CURDATE());
+SELECT event, detail FROM activity_log WHERE student_id = 24 ORDER BY id DESC LIMIT 4;
 
 -- Execution of the stored procedure sp_close_meal: allocation of surplus to NGOs
 CALL sp_close_meal(CURDATE() - INTERVAL 1 DAY, 2);
