@@ -210,7 +210,7 @@ def cmd_local(ask: bool) -> None:
     db = build(host, port, user, password, None)
     env = write_env(db, None, BACKEND / ".env")
     print("\nOK: Local database ready. API settings saved to backend/.env")
-    print("  Next: double-click start.bat (Windows) or run ./start.sh, then open http://localhost:8000")
+    print("  Next: double-click start.bat (Windows) or run ./spin.sh, then open http://localhost:8000")
 
 
 def _find_ca() -> Path:

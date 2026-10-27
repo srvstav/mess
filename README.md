@@ -127,7 +127,7 @@ On the **SSL** tab, set *Use SSL* to **Require**, and *SSL CA File* to `ca.pem`.
 - [ ] Double-click `demo_cloud.bat` (or `demo.bat` for the offline setup) so today has data.
 - [ ] Phone: the student site · Projector: `dashboard.html` · Laptop: Workbench with `demo_queries.sql`.
 - [ ] Backup: if the Wi-Fi fails, use `start.bat` on one laptop (section A). Everything works offline except new logins, which need internet for the SMS. Log in on the demo phone beforehand: a logged-in session stays valid for 7 days.
-- [ ] Read `viva/project.html` sections 10 and 11: who says what, and the likely viva questions. (It's kept out of the public site.)
+- [ ] Revise from the viva sheet (3 pages): the 30-second answer, the numbers, the 15 questions, the demo steps.
 
 ## Troubleshooting
 
@@ -154,7 +154,7 @@ backend/auth.py       login (Firebase SMS or demo code -> session token)
 backend/firebase.py   checks Firebase's signed login token with Google's public keys
 backend/tests/        automated tests: run  backend\.venv\Scripts\python -m pytest -q backend\tests
 docs/                 the website (student site, dashboard, photo credits); docs/food/ = plate photos
-viva/project.html     how it's built: ER diagram, normalization, demo plan, viva answers (not published)
+report/               the project report PDF; report/source/ rebuilds it (and the viva sheet) from the live database
 setup.py              builds the database (local or cloud), used by setup.bat
 demo_data.py          loads a realistic day, used by demo.bat
 ```

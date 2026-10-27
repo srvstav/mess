@@ -107,5 +107,5 @@ Share `CLOUD_DETAILS.txt` and `ca.pem` only with your team. They are not in git,
 | Cloud database | Aiven MySQL | you |
 | API server | Render web service (`render.yaml`) | you |
 | Passwords, PIN, session secret | `backend/.env`, `CLOUD_DETAILS.txt`, Render's `MESS_SETTINGS` (made by setup; never committed) | you |
-| How it's built / viva answers | `viva/project.html` (not published on the site) | you |
+| Project report and how to rebuild it | `report/` and `report/source/` | you |
 | Food photos | `docs/food/`, credits in `docs/credits.html` (keep the credits page: the licences require it) | their photographers |
