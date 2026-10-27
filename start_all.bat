@@ -20,7 +20,6 @@ if errorlevel 1 (
 start "" http://localhost:8000/dashboard.html
 start "MUJ Mess - live activity" /min cmd /c ""backend\.venv\Scripts\python.exe" demo_data.py live"
 start "MUJ Mess - MySQL" cmd /c mysql_show.bat
-if exist "%ProgramFiles%\MySQL\MySQL Workbench*" start "" cmd /c workbench.bat
 echo.
 echo Everything is up:
 echo   Site      : http://localhost:8000

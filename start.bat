@@ -35,6 +35,8 @@ echo Keep this window open. Close it to stop the server.
 echo.
 rem 3. Open the browser only once /health answers (API and database both up), not after a fixed wait.
 start "" /min powershell -NoProfile -Command "for($i=0;$i -lt 60;$i++){try{if((Invoke-WebRequest http://127.0.0.1:8000/health -UseBasicParsing -TimeoutSec 2).StatusCode -eq 200){Start-Process http://localhost:8000; break}}catch{}; Start-Sleep 1}"
+rem 4. Workbench too, with db\tables.sql loaded (click the lightning bolt to show every table).
+if exist "%ProgramFiles%\MySQL\MySQL Workbench*" start "" /min cmd /c workbench.bat
 cd backend
 ".venv\Scripts\python.exe" -m uvicorn main:app --host 127.0.0.1 --port 8000
 echo.
