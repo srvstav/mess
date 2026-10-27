@@ -11,7 +11,7 @@ const FALLBACK_MENU = { slots: [
     { mess_id: 2, name: "BluSpring", dishes: ["Chole", "Bhature", "Veg Pulao", "Lassi"] } ] },
   { slot_id: 3, name: "Hi-Tea", starts_at: "17:00", ends_at: "18:00", messes: [
     { mess_id: 1, name: "BluDove", dishes: ["Samosa", "Green Chutney", "Masala Chai"] },
-    { mess_id: 2, name: "BluSpring", dishes: ["Pineapple Upside-down Cake", "Veg Sandwich", "Lemon Tea"] } ] },
+    { mess_id: 2, name: "BluSpring", dishes: ["Fresh Fruit Tart", "Veg Sandwich", "Lemon Tea"] } ] },
   { slot_id: 4, name: "Dinner", starts_at: "19:30", ends_at: "21:30", messes: [
     { mess_id: 1, name: "BluDove", dishes: ["Farmhouse Pizza", "Veg Burger", "Garlic Bread", "Gulab Jamun"] },
     { mess_id: 2, name: "BluSpring", dishes: ["Dal Baati Churma", "Gatte ki Sabzi", "Chapati", "Kheer"] } ] },
@@ -306,6 +306,7 @@ async function renderSlots() {
     api(`/bookings/me?meal_date=${encodeURIComponent(selectedDate)}`),
   ]);
   const chosen = Object.fromEntries(mine.bookings.map(b => [b.slot_id, b]));
+  const eaten = Object.fromEntries((mine.eaten || []).map(e => [e.slot_id, e]));  // recorded by the mess's face terminal
   $("paused-banner").hidden = !mine.paused;
   const root = $("slots");
   root.replaceChildren();
@@ -362,8 +363,48 @@ async function renderSlots() {
     skip.addEventListener("click", () => book(slot, null));
 
     el.append(head, choices, skip);
+    const ate = eaten[slot.slot_id];
+    if (ate) el.append(ratingRow(slot, ate));
+    // Once a meal is closed (by the database's scheduled event), show where its leftovers went.
+    const given = (mine.donations || []).filter(x => x.slot_id === slot.slot_id);
+    if (given.length) {
+      const note = document.createElement("p");
+      note.className = "donated";
+      note.textContent = "Leftovers donated: " + given.map(x => `${x.mess} ${x.portions} portions → ${x.ngo}`).join(" · ");
+      el.append(note);
+    }
     root.append(el);
   }
+}
+
+// After eating, a student can rate the meal 1-5 stars (the database only accepts it for a meal actually eaten).
+function ratingRow(slot, ate) {
+  const mess = slot.messes.find(m => m.mess_id === ate.mess_id);
+  const row = document.createElement("div");
+  row.className = "rate";
+  const label = document.createElement("span");
+  label.textContent = ate.stars ? `You rated ${mess?.name || "this meal"}` : `Ate at ${mess?.name || "the mess"}. How was it?`;
+  const stars = document.createElement("div");
+  stars.className = "stars";
+  stars.setAttribute("role", "radiogroup");
+  stars.setAttribute("aria-label", `Rate ${slot.name}`);
+  for (let n = 1; n <= 5; n++) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = "★";
+    b.className = n <= (ate.stars || 0) ? "on" : "";
+    b.setAttribute("aria-label", `${n} star${n > 1 ? "s" : ""}`);
+    b.addEventListener("click", async () => {
+      try {
+        await api("/ratings", { method: "POST", body: { meal_date: selectedDate, slot_id: slot.slot_id, stars: n } });
+        toast(`Thanks! ${slot.name} rated ${n}★`);
+        await renderSlots();
+      } catch (e) { toast(e.message); }
+    });
+    stars.append(b);
+  }
+  row.append(label, stars);
+  return row;
 }
 
 async function book(slot, messId) {
@@ -418,7 +459,20 @@ const lastCounts = {};
 
 async function refreshLive() {
   try {
-    const [menu, { forecast }] = await Promise.all([getMenu(), apiFetch("/stats/today")]);
+    const [menu, { forecast, headline }] = await Promise.all([getMenu(), apiFetch("/stats/today")]);
+    // Live counters in the "how" section: set the target, or the text once the count-up has run.
+    for (const n of document.querySelectorAll(".how-num[data-key]")) {
+      const v = Number(headline?.[n.dataset.key] ?? 0);
+      if (Number(n.dataset.count) === v) continue;
+      n.dataset.count = v;
+      const dec = +(n.dataset.decimals || 0);
+      const show = x => (n.textContent = (n.dataset.prefix || "") + x.toFixed(dec) + (n.dataset.suffix || ""));
+      if (document.documentElement.classList.contains("how-static")) show(v);
+      else if (n.classList.contains("counted") && window.gsap) {  // already counted to an older value: glide to the new one
+        const o = { v: parseFloat(n.textContent) || 0 };
+        gsap.to(o, { v, duration: 1.2, ease: "power3.out", onUpdate: () => show(o.v) });
+      }
+    }
     const by = Object.fromEntries(forecast.map(f => [`${f.meal}|${f.mess}`, f]));
     const total = forecast.reduce((s, f) => s + f.booked, 0);
     $("live-note").textContent = total

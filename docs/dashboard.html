@@ -13,7 +13,7 @@
 <header class="bar">
   <h1>Mess <em>ledger</em></h1>
   <span class="meta"><span class="live-dot"></span> live from MySQL · every 2 s · <b id="tick">-</b></span>
-  <nav><a href="index.html">Student site</a><a href="staff.html">Staff counter</a></nav>
+  <nav><a href="index.html">Student site</a></nav>
 </header>
 
 <main class="board">
@@ -33,6 +33,13 @@
         <div class="plot" id="bymeal"></div>
       </figure>
     </div>
+  </section>
+
+  <!-- 1b. QUALITY: what students think of each meal -->
+  <section class="card span">
+    <h2><span>Food ratings · last 7 days</span><code>v_mess_ratings</code></h2>
+    <p class="note">Students can rate only a meal they actually ate (attendance comes from each mess's face-recognition terminal; a trigger refuses anything else).</p>
+    <div class="ratings" id="ratings"></div>
   </section>
 
   <!-- 2. KITCHENS: plan tomorrow -->
@@ -225,6 +232,27 @@
     }), { horizontal: true });
   }
 
+  function renderRatings(list) {
+    const all = {}, by = {};
+    for (const r of list) {
+      const a = (all[r.mess_id] ??= { sum: 0, n: 0, unhappy: 0 });
+      a.sum += Number(r.avg_stars) * Number(r.ratings); a.n += Number(r.ratings); a.unhappy += Number(r.unhappy);
+      (by[r.meal] ??= {})[r.mess_id] = r;
+    }
+    const star = v => `<span class="bar5" data-tip="${v.toFixed(2)} of 5"><i style="width:${(v / 5) * 100}%"></i></span>`;
+    const heads = [1, 2].map(id => {
+      const a = all[id] || { sum: 0, n: 0, unhappy: 0 }, avg = a.n ? a.sum / a.n : 0;
+      return `<div class="rhead ${MESS[id].cls}"><b>${MESS[id].name}</b><div class="big">${avg.toFixed(2)}<small>/ 5 ★</small></div>
+        <span>${a.n.toLocaleString("en-IN")} ratings · ${pct(a.unhappy, a.n)}% gave 1–2 stars</span></div>`;
+    }).join("");
+    const rowsHtml = Object.entries(by).map(([meal, m]) => `<tr><td>${esc(meal)}</td>` + [1, 2].map(id => {
+      const r = m[id]; return r ? `<td class="num">${Number(r.avg_stars).toFixed(2)}</td><td>${star(Number(r.avg_stars))}</td><td class="num muted">${r.ratings}</td>` : "<td></td><td></td><td></td>";
+    }).join("") + "</tr>").join("");
+    $("ratings").innerHTML = `<div class="rheads">${heads}</div><div class="scroll"><table>
+      <thead><tr><th>meal</th><th class="num dove-t">BluDove</th><th></th><th class="num">n</th><th class="num spring-t">BluSpring</th><th></th><th class="num">n</th></tr></thead>
+      <tbody>${rowsHtml || '<tr><td colspan="7" class="empty">No ratings yet.</td></tr>'}</tbody></table></div>`;
+  }
+
   function renderTomorrow(list) {
     const by = {};
     for (const r of list) (by[r.meal] ??= {})[r.mess] = r;
@@ -261,6 +289,7 @@
 
       renderBusiness(d.earnings);
       renderTomorrow(d.tomorrow);
+      renderRatings(d.ratings);
 
       const halls = {};
       for (const h of d.hostels) (halls[h.hostel] ??= { BluDove: 0, BluSpring: 0 })[h.mess] = Number(h.booked);
@@ -270,7 +299,7 @@
           <td><span class="split" style="--dove:${dove}%" data-tip="${esc(name)}: ${dove}% BluDove, ${100 - dove}% BluSpring"></span></td></tr>`;
       });
 
-      const closed = new Set(d.donations.map(x => x.slot_id));  // staff pressed "meal over"
+      const closed = new Set(d.donations.map(x => x.slot_id));  // closed by the ev_close_meals event
       rows("summary", d.summary, 9, r => {
         const st = closed.has(r.slot_id) ? "done" : mealState(r.slot_id);
         const after = st === "done";  // no-shows and donations only mean something once the meal is over

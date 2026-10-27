@@ -8,7 +8,7 @@
     [/rajma/i, "l1"],
     [/chole|bhature/i, "l2"],
     [/samosa/i, "h1"],
-    [/pineapple|cake|pastry/i, "h2"],
+    [/tart|pastry|cake/i, "h2"],
     [/pizza|burger/i, "d1"],
     [/baati|churma/i, "d2"],
   ];

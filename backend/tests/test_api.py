@@ -20,7 +20,6 @@ from db import connect
 from main import app
 
 client = TestClient(app)
-STAFF = {"X-Staff-Pin": settings.staff_pin}
 PROJECT = "mess-test"
 
 # Stand-in for Google's signing key: tokens are signed and checked for real, just with our key.
@@ -132,7 +131,7 @@ def test_menu_has_both_messes_for_all_four_meals() -> None:
 
 
 def test_site_and_dashboards_are_served() -> None:
-    for path in ("/", "/dashboard.html", "/staff.html"):
+    for path in ("/", "/dashboard.html", "/credits.html"):
         assert client.get(path).status_code == 200, path
     live = client.get("/admin/live")
     assert live.status_code == 200 and live.json()["roster"]["students"] >= 1200
@@ -218,26 +217,51 @@ def test_pause_validation() -> None:
         assert client.post("/pause", json=body, headers=auth).status_code in (400, 422)
 
 
-# ---------- staff, attendance, donations ----------
+# ---------- attendance (face terminals), ratings, donations ----------
 
-def test_staff_needs_pin() -> None:
-    assert client.get("/staff/check").status_code == 403
-    assert client.get("/staff/check", headers={"X-Staff-Pin": "000000x"}).status_code == 403
-    assert client.get("/staff/check", headers=STAFF).status_code == 200
+def _face_scan(phone: str, slot_id: int, mess_id: int) -> None:
+    """What a mess's face-recognition terminal does when it recognises a student."""
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO attendance (student_id, meal_date, slot_id, mess_id) "
+                    "SELECT id, %s, %s, %s FROM students WHERE phone = %s", (today(), slot_id, mess_id, phone))
+        conn.commit()
 
 
-def test_serve_booked_walk_in_and_twice() -> None:
-    booked_phone, walk_phone = _phone(), _phone()
-    client.post("/bookings", json={"meal_date": str(today()), "slot_id": 3, "mess_id": 2}, headers=_login(booked_phone))
+def test_rating_only_for_a_meal_eaten() -> None:
+    phone = _phone()
+    auth_h = _login(phone)
+    body = {"meal_date": str(today()), "slot_id": 2, "stars": 4}
+    assert client.post("/ratings", json=body, headers=auth_h).status_code == 409   # not eaten yet
+    _face_scan(phone, 2, 1)
+    assert client.post("/ratings", json=body, headers=auth_h).status_code == 200
+    assert client.post("/ratings", json={**body, "stars": 2}, headers=auth_h).status_code == 200  # change of mind
+    assert client.post("/ratings", json={**body, "stars": 6}, headers=auth_h).status_code == 422
+    eaten = client.get(f"/bookings/me?meal_date={today()}", headers=auth_h).json()["eaten"]
+    assert eaten == [{"slot_id": 2, "mess_id": 1, "stars": 2}]
 
-    r = client.post("/staff/serve", json={"phone": booked_phone, "mess_id": 2, "slot_id": 3}, headers=STAFF).json()
-    assert r["booked_here"] is True and r["name"] == "Test Student"
-    r = client.post("/staff/serve", json={"phone": walk_phone, "mess_id": 2, "slot_id": 3}, headers=STAFF).json()
-    assert r["booked_here"] is False and r["booking"] == "none"
-    again = client.post("/staff/serve", json={"phone": booked_phone, "mess_id": 2, "slot_id": 3}, headers=STAFF)
-    assert again.status_code == 409
-    unknown = client.post("/staff/serve", json={"phone": "6000000000", "mess_id": 2, "slot_id": 3}, headers=STAFF)
-    assert unknown.status_code == 404
+
+def test_rating_trigger_refuses_a_meal_not_eaten() -> None:
+    import pymysql
+    phone = _phone()
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id FROM students WHERE phone = %s", (phone,))
+        sid = cur.fetchone()["id"]
+        with pytest.raises(pymysql.err.OperationalError, match="rate a meal you have eaten"):
+            cur.execute("INSERT INTO ratings (student_id, meal_date, slot_id, mess_id, stars) VALUES (%s, %s, 1, 1, 5)",
+                        (sid, today()))
+
+
+def test_finished_meals_close_by_themselves() -> None:
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute("CALL sp_close_finished_meals()")  # what ev_close_meals runs every 10 minutes
+        conn.commit()
+        cur.execute("SELECT TIME(UTC_TIMESTAMP() + INTERVAL 330 MINUTE) AS now_ist")
+        now_ist = cur.fetchone()["now_ist"]
+        cur.execute("SELECT COUNT(*) AS n FROM meal_slots ms WHERE ms.ends_at <= %s AND EXISTS (SELECT 1 FROM v_meal_summary v "
+                    "WHERE v.meal_date = DATE(UTC_TIMESTAMP() + INTERVAL 330 MINUTE) AND v.slot_id = ms.id AND v.donate > 0) "
+                    "AND NOT EXISTS (SELECT 1 FROM donations d WHERE d.meal_date = DATE(UTC_TIMESTAMP() + INTERVAL 330 MINUTE) "
+                    "AND d.slot_id = ms.id)", (now_ist,))
+        assert cur.fetchone()["n"] == 0  # every finished meal with leftovers has been donated
 
 
 def test_meal_summary_math_and_close_meal() -> None:
@@ -249,10 +273,14 @@ def test_meal_summary_math_and_close_meal() -> None:
         assert r["buffer_left"] == max(r["cooked"] - r["booked"] - r["walk_ins"], 0)
         assert r["donate"] == min(max(r["cooked"] - r["served"], 0), r["buffer_left"] + r["no_shows"] // 2)
 
-    r = client.post("/staff/close-meal", json={"meal_date": str(today()), "slot_id": 3}, headers=STAFF)
-    assert r.status_code == 200
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute("CALL sp_close_meal(%s, 3)", (today(),))
+        conn.commit()
+        cur.execute("SELECT m.name AS mess, d.portions FROM donations d JOIN messes m ON m.id = d.mess_id "
+                    "WHERE d.meal_date = %s AND d.slot_id = 3", (today(),))
+        given = {r["mess"]: r["portions"] for r in cur.fetchall()}
     expected = {(x["mess"]): x["donate"] for x in rows if x["meal_date"] == today() and x["slot_id"] == 3 and x["donate"] > 0}
-    assert {d["mess"]: d["portions"] for d in r.json()["donations"]} == expected
+    assert given == expected
 
 
 def test_demo_mode_shows_the_code_and_logs_in(monkeypatch: pytest.MonkeyPatch) -> None:

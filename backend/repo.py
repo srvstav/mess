@@ -109,13 +109,6 @@ def bookings_for(conn: Connection, student_id: int, meal_date: date) -> list[Row
                 (student_id, meal_date))
 
 
-def booking_at(conn: Connection, student_id: int, meal_date: date, slot_id: int) -> Row | None:
-    return _one(conn, "SELECT b.mess_id, b.status, m.name AS mess FROM bookings b "
-                      "LEFT JOIN messes m ON m.id = b.mess_id "
-                      "WHERE b.student_id = %s AND b.meal_date = %s AND b.slot_id = %s",
-                (student_id, meal_date, slot_id))
-
-
 # ---------- pause / resume (stored procedures) ----------
 
 def pause(conn: Connection, student_id: int, from_date: date, to_date: date) -> None:
@@ -142,13 +135,33 @@ def is_paused(conn: Connection, student_id: int, d: date) -> bool:
 
 # ---------- attendance and donations ----------
 
-def serve(conn: Connection, student_id: int, meal_date: date, slot_id: int, mess_id: int) -> None:
-    _exec(conn, "INSERT INTO attendance (student_id, meal_date, slot_id, mess_id) VALUES (%s, %s, %s, %s)",
-          (student_id, meal_date, slot_id, mess_id))
+def eaten_for(conn: Connection, student_id: int, meal_date: date) -> list[Row]:
+    """Meals the face terminals recorded for this student on this day, with their rating if any."""
+    return _all(conn,
+        "SELECT a.slot_id, a.mess_id, r.stars FROM attendance a LEFT JOIN ratings r "
+        "ON r.student_id = a.student_id AND r.meal_date = a.meal_date AND r.slot_id = a.slot_id "
+        "WHERE a.student_id = %s AND a.meal_date = %s", (student_id, meal_date))
 
 
-def close_meal(conn: Connection, meal_date: date, slot_id: int) -> None:
-    _exec(conn, "CALL sp_close_meal(%s, %s)", (meal_date, slot_id))
+def rate(conn: Connection, student_id: int, meal_date: date, slot_id: int, stars: int, comment: str | None) -> bool:
+    """Rate a meal at the mess where it was eaten. False if it wasn't eaten (nothing to rate)."""
+    eaten = _one(conn, "SELECT mess_id FROM attendance WHERE student_id = %s AND meal_date = %s AND slot_id = %s",
+                 (student_id, meal_date, slot_id))
+    if eaten is None:
+        return False
+    _exec(conn,
+        "INSERT INTO ratings (student_id, meal_date, slot_id, mess_id, stars, comment) VALUES (%s, %s, %s, %s, %s, %s) AS new "
+        "ON DUPLICATE KEY UPDATE stars = new.stars, comment = new.comment",
+        (student_id, meal_date, slot_id, eaten["mess_id"], stars, comment))
+    return True
+
+
+def ratings(conn: Connection, today: date, days: int = 7) -> list[Row]:
+    return _all(conn,
+        "SELECT mess_id, mess, slot_id, meal, ROUND(SUM(avg_stars * ratings) / SUM(ratings), 2) AS avg_stars, "
+        "SUM(ratings) AS ratings, SUM(unhappy) AS unhappy FROM v_mess_ratings "
+        "WHERE meal_date BETWEEN %s - INTERVAL %s DAY AND %s "
+        "GROUP BY mess_id, mess, slot_id, meal ORDER BY slot_id, mess_id", (today, days - 1, today))
 
 
 def meal_summary(conn: Connection, meal_date: date) -> list[Row]:
@@ -159,7 +172,7 @@ def meal_summary(conn: Connection, meal_date: date) -> list[Row]:
 
 def donations_on(conn: Connection, meal_date: date) -> list[Row]:
     return _all(conn,
-        "SELECT d.slot_id, ms.name AS meal, m.name AS mess, n.name AS ngo, n.area, d.portions "
+        "SELECT d.slot_id, d.mess_id, ms.name AS meal, m.name AS mess, n.name AS ngo, n.area, d.portions "
         "FROM donations d JOIN messes m ON m.id = d.mess_id JOIN meal_slots ms ON ms.id = d.slot_id "
         "JOIN ngos n ON n.id = d.ngo_id WHERE d.meal_date = %s ORDER BY d.slot_id, d.mess_id", (meal_date,))
 
@@ -184,6 +197,17 @@ def recent_activity(conn: Connection, limit: int) -> list[Row]:
     return _all(conn,
         "SELECT id, DATE_FORMAT(at, '%%H:%%i:%%s') AS at, event, detail "
         "FROM activity_log ORDER BY id DESC LIMIT %s", (limit,))
+
+
+def headline(conn: Connection, today: date) -> Row:
+    """The three live numbers on the home page."""
+    row = _one(conn,
+        "SELECT (SELECT COUNT(DISTINCT student_id) FROM bookings WHERE meal_date = %s AND status <> 'paused') AS students_today, "
+        "(SELECT COALESCE(SUM(portions), 0) FROM donations WHERE meal_date BETWEEN %s - INTERVAL 6 DAY AND %s) AS donated_week, "
+        "(SELECT COALESCE(ROUND(AVG(stars), 1), 0) FROM ratings WHERE meal_date BETWEEN %s - INTERVAL 6 DAY AND %s) AS rating_week",
+        (today, today, today, today, today))
+    assert row is not None
+    return {k: float(v) for k, v in row.items()}
 
 
 def forecast(conn: Connection, meal_date: date) -> list[Row]:

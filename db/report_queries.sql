@@ -9,6 +9,12 @@ SHOW FULL TABLES;
 -- Structure of the table students
 DESCRIBE students;
 
+-- DDL: addition and removal of a column with ALTER TABLE
+ALTER TABLE students ADD COLUMN blood_group VARCHAR(3) NULL AFTER gender;
+SELECT column_name, column_type, is_nullable FROM information_schema.columns
+WHERE table_schema = 'mess' AND table_name = 'students' AND column_name = 'blood_group';
+ALTER TABLE students DROP COLUMN blood_group;
+
 -- Number of rows in the principal tables
 SELECT (SELECT COUNT(*) FROM students) AS students,
        (SELECT COUNT(*) FROM bookings) AS bookings,
@@ -28,6 +34,35 @@ FROM v_student_directory WHERE phone = '9876500001';
 UPDATE students SET room_no = '415' WHERE phone = '9876500001';
 SELECT event, detail FROM activity_log
 WHERE student_id = (SELECT id FROM students WHERE phone = '9876500001');
+
+-- Insertion of a rating for a meal that the student has eaten
+INSERT INTO ratings (student_id, meal_date, slot_id, mess_id, stars)
+VALUES (1, CURDATE(), 2, 2, 4);
+SELECT r.stars, ms.name AS meal, m.name AS mess, a.served_at
+FROM ratings r
+JOIN attendance a  ON a.student_id = r.student_id AND a.meal_date = r.meal_date AND a.slot_id = r.slot_id
+JOIN meal_slots ms ON ms.id = r.slot_id
+JOIN messes m      ON m.id = r.mess_id
+WHERE r.student_id = 1 AND r.meal_date = CURDATE();
+
+-- DML: deletion of a record with DELETE
+DELETE FROM ratings
+WHERE student_id = 1 AND meal_date = CURDATE() AND slot_id = 2;
+SELECT COUNT(*) AS remaining FROM ratings
+WHERE student_id = 1 AND meal_date = CURDATE();
+
+-- Rejection by the trigger trg_rating_check_ins: rating of a meal not eaten
+INSERT INTO ratings (student_id, meal_date, slot_id, mess_id, stars)
+VALUES (1, CURDATE(), 4, 1, 5);
+
+-- View v_mess_ratings: average rating of each mess for each meal over seven days
+SELECT meal, mess,
+       ROUND(SUM(avg_stars * ratings) / SUM(ratings), 2) AS avg_stars,
+       SUM(ratings) AS ratings, SUM(unhappy) AS one_or_two_stars
+FROM v_mess_ratings
+WHERE meal_date >= CURDATE() - INTERVAL 6 DAY
+GROUP BY slot_id, meal, mess_id, mess
+ORDER BY slot_id, mess_id;
 
 -- Selection with WHERE, ORDER BY and LIMIT clauses
 SELECT reg_no, full_name, year_of_study, room_no
@@ -132,6 +167,24 @@ SELECT slot_id, cost_per_plate FROM mess_costs WHERE mess_id = 1;
 ROLLBACK;
 SELECT slot_id, cost_per_plate FROM mess_costs WHERE mess_id = 1;
 
+-- Partial rollback with SAVEPOINT: only the second update is undone
+START TRANSACTION;
+UPDATE meal_slots SET paid_per_plate = paid_per_plate + 5 WHERE id = 1;
+SAVEPOINT after_breakfast;
+UPDATE meal_slots SET paid_per_plate = paid_per_plate + 5 WHERE id = 2;
+ROLLBACK TO SAVEPOINT after_breakfast;
+SELECT id, name, paid_per_plate FROM meal_slots WHERE id IN (1, 2);
+ROLLBACK;
+
+-- Scheduled event ev_close_meals and the procedure it executes
+SELECT event_name, interval_value, interval_field, status, event_definition
+FROM information_schema.events WHERE event_schema = 'mess';
+CALL sp_close_finished_meals();
+SELECT ms.name AS meal, m.name AS mess, n.name AS ngo, d.portions
+FROM donations d JOIN meal_slots ms ON ms.id = d.slot_id
+JOIN messes m ON m.id = d.mess_id JOIN ngos n ON n.id = d.ngo_id
+WHERE d.meal_date = CURDATE() ORDER BY d.slot_id, d.mess_id;
+
 -- Triggers defined in the database
 SELECT trigger_name, action_timing AS timing, event_manipulation AS event, event_object_table AS on_table
 FROM information_schema.triggers
@@ -152,21 +205,21 @@ VALUES ('230100996', 'Bad Phone', 'M', '12345',
 
 -- Bookings of a student before the declaration of leave
 SELECT meal_date, slot_id, mess_id, status FROM bookings
-WHERE student_id = 15 AND meal_date = CURDATE() ORDER BY slot_id;
+WHERE student_id = 16 AND meal_date = CURDATE() ORDER BY slot_id;
 
 -- Execution of the stored procedure sp_pause_mess
-CALL sp_pause_mess(15, CURDATE(), CURDATE() + INTERVAL 1 DAY);
+CALL sp_pause_mess(16, CURDATE(), CURDATE() + INTERVAL 1 DAY);
 SELECT meal_date, slot_id, mess_id, status FROM bookings
-WHERE student_id = 15 AND meal_date = CURDATE() ORDER BY slot_id;
+WHERE student_id = 16 AND meal_date = CURDATE() ORDER BY slot_id;
 
 -- Rejection of a booking during leave by a trigger (SIGNAL SQLSTATE '45000')
 INSERT INTO bookings (student_id, meal_date, slot_id, mess_id, status)
-VALUES (15, CURDATE(), 4, 1, 'booked')
+VALUES (16, CURDATE(), 4, 1, 'booked')
 ON DUPLICATE KEY UPDATE mess_id = 1, status = 'booked';
 
 -- Execution of sp_resume_mess and the resulting audit entries
-CALL sp_resume_mess(15, CURDATE());
-SELECT event, detail FROM activity_log WHERE student_id = 15 ORDER BY id DESC LIMIT 4;
+CALL sp_resume_mess(16, CURDATE());
+SELECT event, detail FROM activity_log WHERE student_id = 16 ORDER BY id DESC LIMIT 4;
 
 -- Execution of the stored procedure sp_close_meal: allocation of surplus to NGOs
 CALL sp_close_meal(CURDATE() - INTERVAL 1 DAY, 2);
@@ -182,11 +235,13 @@ ORDER BY routine_type, routine_name;
 -- Privileges granted to the application user mess_app
 SHOW GRANTS FOR 'mess_app'@'localhost';
 
--- Creation of a read-only user and grant of privileges on views
+-- Creation of a read-only user, GRANT of privileges on views and REVOKE of one privilege
 DROP USER IF EXISTS 'mess_viewer'@'localhost';
 CREATE USER 'mess_viewer'@'localhost' IDENTIFIED BY 'Viewer#2026';
 GRANT SELECT ON mess.v_daily_forecast TO 'mess_viewer'@'localhost';
 GRANT SELECT ON mess.v_mess_earnings TO 'mess_viewer'@'localhost';
+GRANT SELECT ON mess.v_mess_ratings TO 'mess_viewer'@'localhost';
+REVOKE SELECT ON mess.v_mess_earnings FROM 'mess_viewer'@'localhost';
 SHOW GRANTS FOR 'mess_viewer'@'localhost';
 
 -- Audit log maintained by triggers

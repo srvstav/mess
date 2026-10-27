@@ -26,7 +26,7 @@ Then you:
 ## 2. Run it on your laptop
 
 Follow **README section A** (install MySQL + Python, double-click `setup.bat`, then `start.bat`).
-`setup.bat` creates a new database password, session secret and **Staff PIN** just for you.
+`setup.bat` creates a new database password and session secret just for you.
 
 ## 3. Turn on real SMS login (Firebase)
 
@@ -95,7 +95,7 @@ Share `CLOUD_DETAILS.txt` and `ca.pem` only with your team. They are not in git,
 - [ ] `https://<your-username>.github.io/mess/` loads, and the green dot in the top-right lights up.
 - [ ] Log in with your own number: the SMS arrives, and the site greets you by your roster name.
 - [ ] Book a meal: it shows up in `dashboard.html` and in Workbench query 1.
-- [ ] `staff.html` accepts your Staff PIN (printed by setup; also in `CLOUD_DETAILS.txt`).
+- [ ] After a meal you ate, the booking page lets you rate it, and the dashboard's ratings board updates.
 - [ ] Run `python demo_data.py cloud live` and watch the dashboard move.
 
 ## What lives where

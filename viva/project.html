@@ -79,7 +79,7 @@
 <body>
 <header class="top">
   <a class="logo" href="../docs/index.html">muj<em>mess</em></a>
-  <nav class="links"><a href="../docs/index.html">Student site</a><a href="../docs/dashboard.html">Live board</a><a href="../docs/staff.html">Staff counter</a></nav>
+  <nav class="links"><a href="../docs/index.html">Student site</a><a href="../docs/dashboard.html">Live board</a></nav>
 </header>
 
 <div class="wrap">
@@ -416,11 +416,7 @@
         <li>Show the ER diagram (Database → Reverse Engineer) and explain 3NF.</li>
         <li>Enrol a new student with an <code>INSERT</code> (query a in <code>demo_queries.sql</code>): the ENROL row appears in the feed. Then put a man in a girls' hostel (G1–G10): the trigger refuses it.</li>
         <li>Open the paused-booking trigger and explain SIGNAL.</li></ul></div>
-      <div class="card role"><span class="who">Person 3 · mess staff</span><h3>Counter and donations (2 min)</h3><ul>
-        <li>On the staff page: serve a booked student (green), then a walk-in (yellow).</li>
-        <li>Press "Meal over": <code>sp_close_meal</code> runs.</li>
-        <li>Run queries 4 and 5: no-shows, walk-ins, donate, NGO totals.</li>
-        <li>Walk through the 30% + 50% formula with the real numbers.</li></ul></div>
+      <div class="card role"><span class="who">Person 3 · mess management</span><h3>Ratings, events and donations (2 min)</h3><ul><li>Show <code>SHOW EVENTS;</code>: <code>ev_close_meals</code> closes every finished meal by itself.</li><li>Run <code>CALL sp_close_finished_meals();</code> then queries 4 and 5: no-shows, walk-ins, donate, NGO totals.</li><li>Rate a meal on the phone; show the RATED row and <code>v_mess_ratings</code>.</li><li>Try a rating for a meal not eaten in Workbench: the trigger refuses it.</li></ul></div>
     </div>
   </section>
 

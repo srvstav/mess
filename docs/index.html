@@ -25,10 +25,9 @@
 <header class="hero" id="top">
   <div class="hero-copy">
     <p class="kicker">Manipal University Jaipur · BluDove × BluSpring</p>
-    <h1 class="split">One fee.</h1>
-    <h1 class="split heavy">Two messes.</h1>
-    <h1 class="split serif">every meal, your call.</h1>
-    <p class="lede">Same ₹79k a year. Now you choose where you eat: breakfast, lunch, hi-tea and dinner. The kitchens cook for the people who booked, plus 30%.</p>
+    <h1 class="split">Eat</h1>
+    <h1 class="split heavy">happily 😋</h1>
+    <p class="lede">Choose BluDove or BluSpring for every meal of the day, or skip it, up to a week ahead. Rate what you ate, and the leftovers go to people who need them.</p>
     <a class="cta" href="#book">Book today's meals <span>→</span></a>
   </div>
   <div class="hero-plate" aria-hidden="true">
@@ -54,18 +53,19 @@
 </section>
 
 <!-- HOW: numbers -->
+<!-- Live numbers from MySQL (/stats/today). The defaults show until the server answers. -->
 <section class="how">
   <div class="how-row">
-    <span class="how-num" data-count="4">0</span>
-    <p>meals a day: pick <b>BluDove</b>, <b>BluSpring</b> or skip, up to a week ahead.</p>
+    <span class="how-num" data-key="students_today" data-count="0">0</span>
+    <p>students have already picked <b>BluDove</b>, <b>BluSpring</b> or skip for today's meals.</p>
   </div>
   <div class="how-row">
-    <span class="how-num" data-count="30" data-suffix="%">0</span>
-    <p>buffer on top of bookings, so walk-ins still eat and nothing runs out.</p>
+    <span class="how-num" data-key="donated_week" data-count="0">0</span>
+    <p>portions of leftover food went to NGOs this week. Each meal closes on its own when it ends.</p>
   </div>
   <div class="how-row">
-    <span class="how-num" data-count="0" data-prefix="₹">0</span>
-    <p>extra. Same annual fee as today. You just stop being locked in.</p>
+    <span class="how-num" data-key="rating_week" data-count="0" data-decimals="1" data-suffix="★">0</span>
+    <p>average rating this week, given only by students who actually ate the meal.</p>
   </div>
 </section>
 
@@ -147,7 +147,6 @@
   <p class="foot-big">Eat anywhere.<br><em>Waste nothing.</em></p>
   <nav class="foot-links">
     <a href="dashboard.html">Live dashboard</a>
-    <a href="staff.html">Mess staff counter</a>
   </nav>
   <p class="foot-credit">Food photos: real plates, shared under open licences. <a href="credits.html">Credits</a></p>
 </footer>

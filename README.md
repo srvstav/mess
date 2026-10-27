@@ -1,6 +1,6 @@
 # MUJ Mess
 
-One annual fee and two messes (**BluDove** and **BluSpring**). Students book where they'll eat for every meal: breakfast, lunch, hi-tea and dinner. Each kitchen cooks for the people who booked, plus 30%. Staff mark who was served, and leftovers go to NGOs.
+One annual fee and two messes (**BluDove** and **BluSpring**). Students book where they'll eat for every meal: breakfast, lunch, hi-tea and dinner. Each kitchen cooks for the people who booked, plus 30%. Each mess's face-recognition terminal records who ate, students rate their meals, and a MySQL event closes every finished meal so leftovers go to NGOs.
 
 An RDBMS project: **MySQL 8** (14 tables, 12 triggers, 4 stored procedures, 1 function, 7 views, and a 1,200-student roster) + **Python FastAPI** + a plain HTML/CSS/JS website.
 
@@ -9,7 +9,6 @@ An RDBMS project: **MySQL 8** (14 tables, 12 triggers, 4 stored procedures, 1 fu
 | Page | What it is |
 | --- | --- |
 | `index.html` | Student site: log in with a code (SMS once Firebase is set up; any number works, new ones join the roster), book meals, pause when going home |
-| `staff.html` | Mess counter: mark students served, close a meal so leftovers go to NGOs |
 | `dashboard.html` | Mess ledger: each mess's profit, margin, waste and no-shows over 7 days, tomorrow's shopping plan, and the live MySQL feed (every 2 seconds) |
 
 ```
@@ -60,7 +59,7 @@ Admin user [root]:           ← press Enter
 Password for root:           ← type your MySQL root password (nothing shows while typing; that's normal)
 ```
 
-It then builds the `mess` database and prints a **Staff PIN**. Write the PIN down.
+It then builds the `mess` database, loads the roster and a demo week, and prints the next step.
 
 **4. Double-click `start.bat`.** Keep that black window open. The browser opens http://localhost:8000.
 
@@ -68,7 +67,6 @@ It then builds the `mess` database and prints a **Staff PIN**. Write the PIN dow
 | --- | --- |
 | http://localhost:8000 | student site |
 | http://localhost:8000/dashboard.html | live board |
-| http://localhost:8000/staff.html | staff counter (needs the PIN) |
 | http://localhost:8000/docs | interactive API docs (Swagger) |
 
 **5. (Optional) Double-click `demo.bat`.** It loads a realistic day for the roster: about 700 students' bookings, pauses, logins, attendance and donations, so every table and view has data to show.
@@ -98,7 +96,7 @@ This makes the website work from any phone, and all three laptops' Workbench sho
 4. Double-click **`setup_cloud.bat`** and paste the Service URI when asked. It:
    - builds all tables, triggers, procedures and views in the cloud,
    - copies **one line** (the Render setting) to your clipboard, and also saves it in `RENDER_VALUE.txt`,
-   - writes **`CLOUD_DETAILS.txt`** (the Workbench login + staff PIN) and puts `ca.pem` next to it.
+   - writes **`CLOUD_DETAILS.txt`** (the Workbench login) and puts `ca.pem` next to it.
 
    If it says the server *"will refuse to create triggers"*: in Aiven, open **Service settings → Advanced configuration**, turn on `log_bin_trust_function_creators` if it's listed, and run it again. If it isn't listed, use the offline setup (section A) for the demo.
 
@@ -106,7 +104,7 @@ This makes the website work from any phone, and all three laptops' Workbench sho
 1. Sign up at https://render.com with GitHub, and give it access to this repository.
 2. Open https://dashboard.render.com/blueprint/new → pick this repository.
 3. In the **MESS_SETTINGS** box, paste (Ctrl+V) → **Apply**. The first build takes 3–5 minutes.
-4. When it shows **Live**, open its address (like `https://mess-api-xxxx.onrender.com`). That address is the full website: student site, `/dashboard.html`, `/staff.html`.
+4. When it shows **Live**, open its address (like `https://mess-api-xxxx.onrender.com`). That address is the full website: student site and `/dashboard.html`.
 5. *Optional:* so the github.io address also works, open `docs/config.js` on github.com (pencil icon), set `window.MESS_CLOUD_API = "https://mess-api-xxxx.onrender.com";` and commit. This also turns on the `keep-awake` ping, which stops the free server from sleeping during the day.
 
 **3. Workbench → cloud database (every laptop)**
@@ -144,10 +142,10 @@ db/students.csv       the student roster (1,200 fictional students; add real one
 db/demo_queries.sql   open in Workbench during the demo
 backend/main.py       API endpoints (controller)
 backend/repo.py       every SQL statement, all parameterized (repository)
-backend/auth.py       login (Firebase SMS -> roster check -> session token), staff PIN
+backend/auth.py       login (Firebase SMS or demo code -> session token)
 backend/firebase.py   checks Firebase's signed login token with Google's public keys
 backend/tests/        automated tests: run  backend\.venv\Scripts\python -m pytest -q backend\tests
-docs/                 the website (student, staff, dashboard, photo credits); docs/food/ = plate photos
+docs/                 the website (student site, dashboard, photo credits); docs/food/ = plate photos
 viva/project.html     how it's built: ER diagram, normalization, demo plan, viva answers (not published)
 setup.py              builds the database (local or cloud), used by setup.bat
 demo_data.py          loads a realistic day, used by demo.bat

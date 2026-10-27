@@ -1,4 +1,4 @@
-"""Login (Firebase phone OTP -> our own session token) and the staff PIN. Token signing is stdlib only."""
+"""Login (Firebase phone OTP, or an on-screen demo code) -> our own session token. Token signing is stdlib only."""
 import base64
 import hashlib
 import hmac
@@ -144,9 +144,3 @@ def current_student(authorization: str = Header(default="")) -> int:
     if payload.get("exp", 0) < time.time():
         raise unauthorized
     return int(payload["sid"])
-
-
-def staff_only(x_staff_pin: str = Header(default="")) -> None:
-    """FastAPI dependency for mess-counter actions: 'X-Staff-Pin: <pin>'."""
-    if not x_staff_pin or not hmac.compare_digest(x_staff_pin.encode(), settings.staff_pin.encode()):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Wrong staff PIN")

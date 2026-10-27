@@ -11,7 +11,6 @@ if not exist "backend\.env" (
 echo MUJ Mess is starting on http://localhost:8000
 echo   Student site : http://localhost:8000
 echo   Live board   : http://localhost:8000/dashboard.html
-echo   Staff counter: http://localhost:8000/staff.html
 echo   API docs     : http://localhost:8000/docs
 echo Keep this window open. Close it to stop the server.
 echo.

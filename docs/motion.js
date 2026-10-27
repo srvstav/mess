@@ -90,6 +90,7 @@
     document.documentElement.classList.add("no-motion");
     document.querySelectorAll(".reveal-words .w").forEach(w => (w.style.opacity = 1));
     document.querySelectorAll(".how-num").forEach(n => (n.textContent = (n.dataset.prefix || "") + n.dataset.count + (n.dataset.suffix || "")));
+    document.documentElement.classList.add("how-static");
     // Colour each stacked meal section itself when there is no pinned scroll.
     document.querySelectorAll(".meal").forEach(p => (p.style.background = p.dataset.bg));
     return;
@@ -184,11 +185,17 @@
   /* ---------- numbers count up ---------- */
   document.querySelectorAll(".how-num").forEach(n => {
     const obj = { v: 0 };
-    const target = +n.dataset.count;
-    const paint = () => (n.textContent = (n.dataset.prefix || "") + Math.round(obj.v) + (n.dataset.suffix || ""));
+    const dec = +(n.dataset.decimals || 0);
+    const paint = () => (n.textContent = (n.dataset.prefix || "") + obj.v.toFixed(dec) + (n.dataset.suffix || ""));
     paint();
     const st = { trigger: n, start: "top 85%" };
-    gsap.to(obj, { v: target, duration: 1.6, ease: "power3.out", onUpdate: paint, scrollTrigger: st });
+    // The target is read when the count starts, so live numbers that arrived meanwhile are used.
+    gsap.to(obj, { v: () => +n.dataset.count, duration: 1.6, ease: "power3.out", onUpdate: paint,
+      onComplete: () => {
+        n.classList.add("counted");
+        // The live number may have arrived while counting: glide on to it.
+        if (+n.dataset.count !== obj.v) gsap.to(obj, { v: +n.dataset.count, duration: 1, ease: "power3.out", onUpdate: paint });
+      }, scrollTrigger: st });
     gsap.from(n, { yPercent: 40, opacity: 0, duration: 1.1, scrollTrigger: st });
     gsap.from(n.nextElementSibling, { y: 30, opacity: 0, duration: 1, delay: 0.1, scrollTrigger: st });
   });

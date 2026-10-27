@@ -68,7 +68,6 @@ class Settings:
     db_name: str
     db_ssl_ca: str | None
     token_secret: bytes
-    staff_pin: str
     firebase_project_id: str | None  # None = login not set up yet (see HANDOVER.md, step 3)
     allowed_origins: tuple[str, ...]
     token_ttl_seconds: int = 7 * 24 * 3600
@@ -77,9 +76,6 @@ class Settings:
 
 
 def load_settings() -> Settings:
-    pin = _required("STAFF_PIN")
-    if len(pin) < 6:
-        raise RuntimeError("STAFF_PIN must be at least 6 characters")
     return Settings(
         db_host=os.environ.get("DB_HOST", "127.0.0.1"),
         db_port=int(os.environ.get("DB_PORT", "3306")),
@@ -88,7 +84,6 @@ def load_settings() -> Settings:
         db_name=os.environ.get("DB_NAME", "mess"),
         db_ssl_ca=_ssl_ca_path(),
         token_secret=_required("TOKEN_SECRET").encode(),
-        staff_pin=pin,
         firebase_project_id=_firebase_project_id(),
         allowed_origins=tuple(o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if o.strip()),
     )

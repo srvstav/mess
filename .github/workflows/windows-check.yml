@@ -46,7 +46,7 @@ jobs:
       - name: Every page and endpoint answers
         shell: pwsh
         run: |
-          foreach ($p in "/", "/dashboard.html", "/staff.html", "/credits.html", "/docs", "/menu", "/stats/today", "/admin/live") {
+          foreach ($p in "/", "/dashboard.html", "/credits.html", "/docs", "/menu", "/stats/today", "/admin/live") {
             $code = (Invoke-WebRequest "http://127.0.0.1:8000$p" -UseBasicParsing).StatusCode
             "$code  $p"
             if ($code -ne 200) { throw "$p returned $code" }
@@ -54,7 +54,7 @@ jobs:
           $menu = Invoke-RestMethod http://127.0.0.1:8000/menu
           if ($menu.slots.Count -ne 4) { throw "menu should have 4 meals" }
 
-      - name: Full booking flow over HTTP (session, book, staff serve, close meal)
+      - name: Full booking flow over HTTP (session, book, face scan, rating, auto-close)
         shell: pwsh
         run: |
           $api = "http://127.0.0.1:8000"
@@ -68,10 +68,10 @@ jobs:
           "logged in as: $((Invoke-RestMethod "$api/me" -Headers $h).student.full_name)"
           $today = (Invoke-RestMethod "$api/health").today
           Invoke-RestMethod "$api/bookings" -Method Post -Headers $h -ContentType "application/json" -Body (@{meal_date=$today; slot_id=4; mess_id=2} | ConvertTo-Json) | Out-Null
-          $pin = (Get-Content backend\.env | Where-Object { $_ -like "STAFF_PIN=*" }).Split("=")[1]
-          $s = Invoke-RestMethod "$api/staff/serve" -Method Post -Headers @{ "X-Staff-Pin" = $pin } -ContentType "application/json" -Body '{"phone":"7000000001","mess_id":2,"slot_id":4}'
-          if (-not $s.booked_here) { throw "serve should say booked here" }
-          Invoke-RestMethod "$api/staff/close-meal" -Method Post -Headers @{ "X-Staff-Pin" = $pin } -ContentType "application/json" -Body (@{meal_date=$today; slot_id=4} | ConvertTo-Json) | Out-Null
+          # The face terminal records the meal; then the student rates it; then the event's procedure closes meals.
+          mysql -u root -e "INSERT INTO mess.attendance (student_id, meal_date, slot_id, mess_id) SELECT id, '$today', 4, 2 FROM mess.students WHERE phone = '7000000001';"
+          Invoke-RestMethod "$api/ratings" -Method Post -Headers $h -ContentType "application/json" -Body (@{meal_date=$today; slot_id=4; stars=5} | ConvertTo-Json) | Out-Null
+          mysql -u root -e "CALL mess.sp_close_finished_meals();"
           $live = Invoke-RestMethod "$api/admin/live"
           "activity rows: $($live.activity.Count)"
           $live.activity | Select-Object -First 6 | Format-Table -AutoSize | Out-String -Width 200

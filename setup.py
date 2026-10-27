@@ -147,6 +147,11 @@ def build(host: str, port: int, admin_user: str, admin_pass: str, ssl_ca: str | 
         n = load_students(conn, ROOT / "db" / "students.csv")
         print(f"-> Loaded the student roster ({n} students from db/students.csv)")
         with conn.cursor() as cur:
+            # ev_close_meals only runs when the event scheduler is on (it is by default in MySQL 8).
+            try:
+                cur.execute("SET GLOBAL event_scheduler = ON")
+            except pymysql.MySQLError:
+                print("   (could not switch the event scheduler on; meals can still be closed with CALL sp_close_finished_meals())")
             cur.execute("CALL sp_demo_week()")
         conn.commit()
         print("-> Filled a demo week (CALL sp_demo_week): 6 days served and closed, plus today's bookings")
@@ -178,7 +183,6 @@ def write_env(db: dict[str, str], ssl_ca_pem: str | None, target: Path) -> dict[
     env = {
         **db,
         "TOKEN_SECRET": secrets.token_hex(32),
-        "STAFF_PIN": f"{secrets.randbelow(10**6):06d}",
         "ALLOWED_ORIGINS": "*",
     }
     if ssl_ca_pem:
@@ -206,7 +210,6 @@ def cmd_local(ask: bool) -> None:
     db = build(host, port, user, password, None)
     env = write_env(db, None, BACKEND / ".env")
     print("\nOK: Local database ready. API settings saved to backend/.env")
-    print(f"  Staff PIN (for staff.html): {env['STAFF_PIN']}")
     print("  Next: double-click start.bat (Windows) or run ./start.sh, then open http://localhost:8000")
 
 
@@ -264,7 +267,7 @@ def cmd_cloud() -> None:
         "MySQL Workbench -> new connection:\n"
         f"  Hostname: {url.hostname}\n  Port: {url.port or 3306}\n  Username: {admin_user}\n  Password: {admin_pass}\n"
         "  SSL tab: Use SSL = Require, SSL CA File = ca.pem (send it along with this file)\n\n"
-        f"Staff PIN (staff.html): {env['STAFF_PIN']}\n\n"
+        "\n"
         "On the laptop that ran setup_cloud.bat: double-click workbench_cloud.bat to open Workbench already connected.\n"
         "Everyone else: WORKBENCH.md, section 1.\n", encoding="utf-8")
     (ROOT / "ca.pem").write_text(ca_pem, encoding="utf-8")
@@ -275,7 +278,6 @@ def cmd_cloud() -> None:
     print("  Render needs ONE value, named MESS_SETTINGS.")
     print("  It is " + ("already COPIED - just paste it (Ctrl+V) in Render." if copied else "in RENDER_VALUE.txt - copy all of it."))
     print("  Workbench details for the team: CLOUD_DETAILS.txt (+ ca.pem)")
-    print(f"  Staff PIN: {env['STAFF_PIN']}")
 
 
 def _sql(v: str) -> str:

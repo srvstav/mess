@@ -102,7 +102,7 @@ with conn, conn.cursor() as cur:
         if not cur.fetchone():
             cur.execute("CALL sp_pause_mess(%s, %s, %s)", (sid, today, today + timedelta(days=3)))
 
-    # Breakfast and lunch are over: about 85% of bookers came, plus a few walk-ins.
+    # Breakfast and lunch are over: the face terminals saw about 85% of bookers, plus a few walk-ins.
     for slot in (1, 2):
         cur.execute("SELECT student_id, mess_id FROM bookings WHERE meal_date = %s AND slot_id = %s AND status = 'booked'",
                     (today, slot))
@@ -142,7 +142,7 @@ with conn, conn.cursor() as cur:
         sys.exit(0)
 
     # ---------- live: one realistic action every 1-2.5 s, through the same SQL the website uses ----------
-    print("\nLive: making bookings, changes and serves. Watch dashboard.html or SELECT * FROM activity_log. Ctrl+C stops.", flush=True)
+    print("\nLive: bookings, mess switches, face-terminal serves and ratings. Watch dashboard.html or SELECT * FROM activity_log. Ctrl+C stops.", flush=True)
     live = random.Random()
     others = ids[cut + 12:]  # hadn't booked yet today
 
@@ -154,11 +154,18 @@ with conn, conn.cursor() as cur:
             cur.execute("INSERT INTO bookings (student_id, meal_date, slot_id, mess_id, status) "
                         "VALUES (%s,%s,%s,%s,'booked') AS n ON DUPLICATE KEY UPDATE mess_id = n.mess_id, status = n.status",
                         (sid, today, slot, live.choice((1, 2))))
-        elif roll < 0.75:  # someone switches mess for dinner
+        elif roll < 0.62:  # someone rates a meal they ate today (the trigger checks they really ate it)
+            cur.execute("SELECT a.student_id, a.slot_id, a.mess_id FROM attendance a LEFT JOIN ratings r "
+                        "ON r.student_id = a.student_id AND r.meal_date = a.meal_date AND r.slot_id = a.slot_id "
+                        "WHERE a.meal_date = %s AND r.id IS NULL ORDER BY RAND() LIMIT 1", (today,))
+            if row := cur.fetchone():
+                cur.execute("INSERT INTO ratings (student_id, meal_date, slot_id, mess_id, stars) VALUES (%s,%s,%s,%s,%s)",
+                            (row[0], today, row[1], row[2], live.choices((2, 3, 4, 5), (1, 2, 4, 3))[0]))
+        elif roll < 0.8:  # someone switches mess for dinner
             cur.execute("UPDATE bookings SET mess_id = 3 - mess_id WHERE id = (SELECT id FROM ("
                         "SELECT id FROM bookings WHERE meal_date = %s AND slot_id = 4 AND status = 'booked' "
                         "ORDER BY RAND() LIMIT 1) x)", (today,))
-        else:  # the hi-tea counter serves someone who booked
+        else:  # the hi-tea face terminal recognises someone who booked
             cur.execute("SELECT b.student_id, b.mess_id FROM bookings b LEFT JOIN attendance a "
                         "ON a.student_id = b.student_id AND a.meal_date = b.meal_date AND a.slot_id = b.slot_id "
                         "WHERE b.meal_date = %s AND b.slot_id = 3 AND b.status = 'booked' AND a.id IS NULL "

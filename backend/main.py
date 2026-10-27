@@ -25,12 +25,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=list(settings.allowed_origins),
     allow_methods=["GET", "POST"],
-    allow_headers=["Authorization", "Content-Type", "X-Staff-Pin"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 Conn = Annotated[Connection, Depends(get_conn)]
 StudentId = Annotated[int, Depends(auth.current_student)]
-Staff = Annotated[None, Depends(auth.staff_only)]
 Phone = Annotated[str, Field(pattern=r"^[6-9]\d{9}$", description="10-digit Indian mobile")]
 SlotId = Annotated[int, Field(ge=1, le=255)]
 MessId = Annotated[int, Field(ge=1, le=255)]
@@ -77,15 +76,11 @@ class PauseIn(BaseModel):
         return self
 
 
-class ServeIn(BaseModel):
-    phone: Phone
-    mess_id: MessId
-    slot_id: SlotId
-
-
-class CloseIn(BaseModel):
+class RatingIn(BaseModel):
     meal_date: date
     slot_id: SlotId
+    stars: Annotated[int, Field(ge=1, le=5)]
+    comment: Annotated[str | None, Field(max_length=200)] = None
 
 
 def _bad(msg: str) -> HTTPException:
@@ -152,7 +147,8 @@ def get_menu(conn: Conn) -> dict:
 @app.get("/bookings/me", tags=["student"])
 def my_bookings(student_id: StudentId, conn: Conn, meal_date: date | None = None) -> dict:
     d = meal_date or today()
-    return {"meal_date": d, "paused": repo.is_paused(conn, student_id, d), "bookings": repo.bookings_for(conn, student_id, d)}
+    return {"meal_date": d, "paused": repo.is_paused(conn, student_id, d), "bookings": repo.bookings_for(conn, student_id, d),
+            "eaten": repo.eaten_for(conn, student_id, d), "donations": repo.donations_on(conn, d)}
 
 
 @app.post("/bookings", tags=["student"])
@@ -188,41 +184,15 @@ def resume(student_id: StudentId, conn: Conn) -> dict[str, str]:
     return {"status": "resumed"}
 
 
-# ---------- mess staff (PIN) ----------
+# ---------- ratings: only for meals the student actually ate (the face terminals write attendance) ----------
 
-@app.get("/staff/check", tags=["staff"])
-def staff_check(_: Staff) -> dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.post("/staff/serve", tags=["staff"])
-def staff_serve(body: ServeIn, _: Staff, conn: Conn) -> dict:
-    """Record that a student ate. Works for walk-ins too; they come out of the 30% buffer."""
-    student = repo.student_by_phone(conn, body.phone)
-    if student is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No student on the roster with this number")
-    if not repo.slot_exists(conn, body.slot_id) or not repo.mess_exists(conn, body.mess_id):
-        raise _bad("Unknown meal or mess")
-    t = today()
-    booking = repo.booking_at(conn, student["id"], t, body.slot_id)
-    try:
-        repo.serve(conn, student["id"], t, body.slot_id, body.mess_id)
-    except pymysql.err.IntegrityError:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Already served this meal today") from None
-    booked_here = bool(booking and booking["status"] == "booked" and booking["mess_id"] == body.mess_id)
-    return {
-        "served": True,
-        "name": student["full_name"],
-        "booked_here": booked_here,
-        "booking": booking["mess"] if booking and booking["mess"] else (booking["status"] if booking else "none"),
-    }
-
-
-@app.post("/staff/close-meal", tags=["staff"])
-def staff_close_meal(body: CloseIn, _: Staff, conn: Conn) -> dict:
-    """Run sp_close_meal: leftover food is assigned to the NGO that has received the least so far."""
-    repo.close_meal(conn, body.meal_date, body.slot_id)
-    return {"donations": [d for d in repo.donations_on(conn, body.meal_date) if d["slot_id"] == body.slot_id]}
+@app.post("/ratings", tags=["student"])
+def rate(body: RatingIn, student_id: StudentId, conn: Conn) -> dict[str, str]:
+    if body.meal_date > today():
+        raise _bad("You can't rate a meal that hasn't happened")
+    if not repo.rate(conn, student_id, body.meal_date, body.slot_id, body.stars, body.comment):
+        raise HTTPException(status.HTTP_409_CONFLICT, "You can only rate a meal you have eaten")
+    return {"status": "rated"}
 
 
 # ---------- public dashboards (no personal data) ----------
@@ -230,7 +200,7 @@ def staff_close_meal(body: CloseIn, _: Staff, conn: Conn) -> dict:
 @app.get("/stats/today", tags=["dashboard"])
 def stats_today(conn: Conn) -> dict:
     t = today()
-    return {"meal_date": t, "forecast": repo.forecast(conn, t)}
+    return {"meal_date": t, "forecast": repo.forecast(conn, t), "headline": repo.headline(conn, t)}
 
 
 _PHONE = re.compile(r"\b([6-9]\d)\d{5}(\d{3})\b")
@@ -251,6 +221,7 @@ def live(conn: Conn, limit: int = Query(default=25, ge=1, le=100)) -> dict:
         "hostels": repo.hostel_split(conn, t),
         "donations": repo.donations_on(conn, t),
         "ngos": repo.ngo_totals(conn),
+        "ratings": repo.ratings(conn, t),
     }
 
 

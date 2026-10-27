@@ -3,12 +3,13 @@
 -- MySQL 8.0+. Run with:  python setup.py local   (or: setup.bat on Windows)
 --
 -- Tables (3NF):  programmes, hostels, students, logins, messes, meal_slots, mess_costs, menu_items,
---                bookings, pauses, attendance, ngos, donations, activity_log
+--                bookings, pauses, attendance, ratings, ngos, donations, activity_log
 -- Triggers:      check every student's hostel/year; log every enrolment, login, booking,
 --                serve and donation; block bookings while paused
 -- Function:      fn_short_name ('Aarav Sharma' -> 'Aarav S.') for the public feed
 -- Views:         v_student_directory, v_live_bookings, v_daily_forecast, v_hostel_split,
---                v_meal_summary, v_mess_earnings, v_ngo_totals
+--                v_meal_summary, v_mess_earnings, v_mess_ratings, v_ngo_totals
+-- Event:         ev_close_meals closes every finished meal automatically (every 10 minutes)
 -- Procedures:    sp_check_student (used by triggers), sp_pause_mess, sp_resume_mess,
 --                sp_close_meal (transactions), sp_demo_day / sp_demo_week (demo data)
 -- =====================================================================
@@ -154,7 +155,7 @@ CREATE TABLE pauses (
   CONSTRAINT chk_pause_range CHECK (to_date >= from_date)
 );
 
--- Who actually ate. Staff record this at the counter.
+-- Who actually ate. Written by the face-recognition terminal at each mess counter (one row per face match).
 -- A student with no booking at this mess is a walk-in (served from the 30% buffer).
 CREATE TABLE attendance (
   id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -168,6 +169,24 @@ CREATE TABLE attendance (
   FOREIGN KEY (student_id) REFERENCES students(id),
   FOREIGN KEY (slot_id)    REFERENCES meal_slots(id),
   FOREIGN KEY (mess_id)    REFERENCES messes(id)
+);
+
+-- A student's 1-5 star rating of a meal they ate. Only possible after eating it (trigger trg_rating_check_*).
+CREATE TABLE ratings (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  student_id  INT UNSIGNED NOT NULL,
+  meal_date   DATE NOT NULL,
+  slot_id     TINYINT UNSIGNED NOT NULL,
+  mess_id     TINYINT UNSIGNED NOT NULL,
+  stars       TINYINT UNSIGNED NOT NULL,
+  comment     VARCHAR(200) NULL,
+  rated_at    DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uq_one_rating (student_id, meal_date, slot_id),
+  INDEX idx_rating_mess (mess_id, slot_id, meal_date),
+  FOREIGN KEY (student_id) REFERENCES students(id),
+  FOREIGN KEY (slot_id)    REFERENCES meal_slots(id),
+  FOREIGN KEY (mess_id)    REFERENCES messes(id),
+  CONSTRAINT chk_stars CHECK (stars BETWEEN 1 AND 5)
 );
 
 -- Food given away after a meal closes. One row per mess per meal.
@@ -328,6 +347,31 @@ BEGIN
   WHERE s.id = NEW.student_id;
 END$$
 
+-- A rating is accepted only for a meal the student was actually served, at that mess.
+CREATE TRIGGER trg_rating_check_ins BEFORE INSERT ON ratings FOR EACH ROW
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM attendance a WHERE a.student_id = NEW.student_id AND a.meal_date = NEW.meal_date
+                   AND a.slot_id = NEW.slot_id AND a.mess_id = NEW.mess_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You can only rate a meal you have eaten';
+  END IF;
+END$$
+
+CREATE TRIGGER trg_rating_check_upd BEFORE UPDATE ON ratings FOR EACH ROW
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM attendance a WHERE a.student_id = NEW.student_id AND a.meal_date = NEW.meal_date
+                   AND a.slot_id = NEW.slot_id AND a.mess_id = NEW.mess_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'You can only rate a meal you have eaten';
+  END IF;
+END$$
+
+CREATE TRIGGER trg_rating_log AFTER INSERT ON ratings FOR EACH ROW
+BEGIN
+  INSERT INTO activity_log (event, student_id, detail)
+  SELECT 'RATED', NEW.student_id, CONCAT(fn_short_name(s.full_name), ' · ', ms.name, ' · ', m.name, ' · ', REPEAT('★', NEW.stars))
+  FROM students s, meal_slots ms, messes m
+  WHERE s.id = NEW.student_id AND ms.id = NEW.slot_id AND m.id = NEW.mess_id;
+END$$
+
 CREATE TRIGGER trg_donation_log AFTER INSERT ON donations FOR EACH ROW
 BEGIN
   INSERT INTO activity_log (event, detail)
@@ -395,6 +439,31 @@ BEGIN
   COMMIT;
 END$$
 
+-- Close every meal of today (India time) whose serving window has ended and that isn't closed yet.
+-- Called every 10 minutes by the event ev_close_meals, so no one has to press a button.
+CREATE PROCEDURE sp_close_finished_meals()
+BEGIN
+  DECLARE done INT DEFAULT 0;
+  DECLARE v_slot TINYINT UNSIGNED;
+  DECLARE v_now DATETIME DEFAULT UTC_TIMESTAMP() + INTERVAL 330 MINUTE;  -- India time, whatever the server's zone
+  DECLARE cur CURSOR FOR
+    SELECT ms.id FROM meal_slots ms
+    WHERE ms.ends_at <= TIME(v_now)
+      AND NOT EXISTS (SELECT 1 FROM donations d WHERE d.meal_date = DATE(v_now) AND d.slot_id = ms.id);
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+  OPEN cur;
+  close_loop: LOOP
+    FETCH cur INTO v_slot;
+    IF done THEN LEAVE close_loop; END IF;
+    CALL sp_close_meal(DATE(v_now), v_slot);
+  END LOOP;
+  CLOSE cur;
+END$$
+
+CREATE EVENT ev_close_meals ON SCHEDULE EVERY 10 MINUTE
+COMMENT 'Closes finished meals and hands leftovers to NGOs'
+DO CALL sp_close_finished_meals()$$
+
 -- Demo data made by the database itself (no Python needed): one CALL fills a day.
 -- About 70% of students not on pause book each meal; some skip. With p_serve, about 85% of
 -- bookers are served and every meal is closed (donations). A day that already has bookings is left alone.
@@ -420,6 +489,10 @@ BEGIN
       INSERT INTO attendance (student_id, meal_date, slot_id, mess_id)
       SELECT student_id, meal_date, slot_id, mess_id FROM bookings
       WHERE meal_date = p_date AND status = 'booked' AND RAND() < 0.85;
+      INSERT INTO ratings (student_id, meal_date, slot_id, mess_id, stars)
+      SELECT student_id, meal_date, slot_id, mess_id,
+             LEAST(5, GREATEST(1, ROUND(ELT((mess_id - 1) * 4 + slot_id, 4.1, 3.7, 3.4, 4.3, 3.6, 4.4, 4.0, 3.5) + (RAND() - 0.5) * 2.4)))
+      FROM attendance WHERE meal_date = p_date AND RAND() < 0.3;
       CALL sp_close_meal(p_date, 1);
       CALL sp_close_meal(p_date, 2);
       CALL sp_close_meal(p_date, 3);
@@ -547,6 +620,16 @@ FROM v_meal_summary s
 JOIN meal_slots ms  ON ms.id = s.slot_id
 JOIN mess_costs c   ON c.mess_id = s.mess_id AND c.slot_id = s.slot_id
 LEFT JOIN donations d ON d.meal_date = s.meal_date AND d.slot_id = s.slot_id AND d.mess_id = s.mess_id;
+
+-- How each mess's meals are rated: average stars and number of ratings, per day and meal.
+CREATE VIEW v_mess_ratings AS
+SELECT r.meal_date, r.mess_id, m.name AS mess, r.slot_id, ms.name AS meal,
+       ROUND(AVG(r.stars), 2) AS avg_stars, COUNT(*) AS ratings,
+       SUM(r.stars <= 2) AS unhappy
+FROM ratings r
+JOIN messes m      ON m.id = r.mess_id
+JOIN meal_slots ms ON ms.id = r.slot_id
+GROUP BY r.meal_date, r.mess_id, m.name, r.slot_id, ms.name;
 
 -- Total food each NGO has received.
 CREATE VIEW v_ngo_totals AS
