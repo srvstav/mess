@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-rem Opens MySQL Workbench already connected, with db\demo_queries.sql loaded.
+rem Opens MySQL Workbench already connected, with db\tables.sql loaded.
 rem   workbench.bat         this laptops MySQL (root@127.0.0.1)
 rem   workbench.bat cloud   the cloud MySQL (details saved by setup_cloud.bat)
 set "WB="
@@ -20,6 +20,6 @@ if /i "%~1"=="cloud" (
   )
   set /p CONN=<"backend\.workbench_cloud"
 )
-echo Opening Workbench on %CONN% with db\demo_queries.sql
-echo It asks for the password once. Then put the cursor in a query and press Ctrl+Enter.
-start "" "%WB%" --query "%CONN%" --open "%~dp0db\demo_queries.sql"
+echo Opening Workbench on %CONN% with db\tables.sql
+echo It asks for the password once. Then click the lightning bolt to show every table.
+start "" "%WB%" --query "%CONN%" --open "%~dp0db\tables.sql"
